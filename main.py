@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query,UploadFile, File
 import urllib.request
 from typing import Optional
 import fitz
@@ -9,14 +9,40 @@ import openai
 #import gradio as gr
 import os
 from sklearn.neighbors import NearestNeighbors
+from mangum import Mangum
 
 app = FastAPI()
+handler=Mangum(app)
 
 @app.get("/")
-async def root(api: Optional[str]=Query(None,title="api"),text: Optional[list]=Query(None,title="text"),q: Optional[str]=Query(None,title="q")):
-    load_recommender(text)
-    answer = generate_answer(q,api)
-    return {"message": "Hello World","api":api,"text":text,"answer":answer}
+async def root(api: Optional[str]=Query(None,title="api"),
+               text: Optional[list]=Query(None,title="text"),
+               q: Optional[str]=Query(None,title="q"),
+               link: Optional[str]=Query(None,title="link")):
+    #load_recommender(text)
+    #answer= generate_answer(q,api)
+    #print(link)
+    #print(link.replace(" ","%20"))
+    answer= question_answer(link,None,q,api)
+    return {"message": "Hello World","api":api,"text":text,'response':answer}
+
+@app.post("/api")
+async def root(api: Optional[str]=Query(None,title="api"),
+               text: Optional[list]=Query(None,title="text"),
+               q: Optional[str]=Query(None,title="q")
+               ,file: UploadFile = Query(None,title="file")):
+    #load_recommender(text)
+    #answer= generate_answer(q,api)
+    #answer= question_answer("",file,q,api)
+    return {file: file.filename}
+    #return {"message": "Hello World","api":api,"text":text,'response':answer}
+
+@app.post("/uploadfile")
+async def create_upload_file(file: UploadFile | None = None):
+    if not file:
+        return {"message": "No upload file sent"}
+    else:
+        return {"filename": file.filename}
 
 
 def download_pdf(url, output_path):
@@ -30,8 +56,8 @@ def preprocess(text):
 
 
 def pdf_to_text(path, start_page=1, end_page=None):
-    #doc = fitz.open(path)
-    doc = fitz.Document(path)
+    doc = fitz.open(path)
+    #doc = fitz.Document(path)
     total_pages = doc.page_count
 
     if end_page is None:
@@ -106,8 +132,8 @@ class SemanticSearch:
 
 def load_recommender(path, start_page=1):
     global recommender
-    #texts = pdf_to_text(path, start_page=start_page)
-    chunks = text_to_chunks(path, start_page=start_page)
+    texts = pdf_to_text(path, start_page=start_page)
+    chunks = text_to_chunks(texts, start_page=start_page)
     recommender.fit(chunks)
     return 'Corpus Loaded.'
 
@@ -138,7 +164,7 @@ def generate_answer(question,openAI_key):
               "Citation should be done at the end of each sentence. If the search results mention multiple subjects "\
               "with the same name, create separate answers for each. Only include information found in the results and "\
               "don't add any additional information. Make sure the answer is correct and don't output false content. "\
-              "If the text does not relate to the query, simply state 'Text Not Found in PDF'. Ignore outlier "\
+              "If the text does not relate to the query, simply state 'I'm sorry, I'm not sure what you are asking. Could you please provide more context or clarify your question?'. Ignore outlier "\
               "search results which has nothing to do with the question. Only answer what is asked. The "\
               "answer should be short and concise. Answer step-by-step. \n\nQuery: {question}\nAnswer: "
     
@@ -175,30 +201,3 @@ def question_answer(url, file, question,openAI_key):
 
 
 recommender = SemanticSearch()
-
-title = 'PDF GPT'
-description = """ PDF GPT allows you to chat with your PDF file using Universal Sentence Encoder and Open AI. It gives hallucination free response than other tools as the embeddings are better than OpenAI. The returned response can even cite the page number in square brackets([]) where the information is located, adding credibility to the responses and helping to locate pertinent information quickly."""
-
-# with gr.Blocks() as demo:
-
-#     gr.Markdown(f'<center><h1>{title}</h1></center>')
-#     gr.Markdown(description)
-
-#     with gr.Row():
-        
-#         with gr.Group():
-#             gr.Markdown(f'<p style="text-align:center">Get your Open AI API key <a href="https://platform.openai.com/account/api-keys">here</a></p>')
-#             openAI_key=gr.Textbox(label='Enter your OpenAI API key here')
-#             url = gr.Textbox(label='Enter PDF URL here')
-#             gr.Markdown("<center><h4>OR<h4></center>")
-#             file = gr.File(label='Upload your PDF/ Research Paper / Book here', file_types=['.pdf'])
-#             question = gr.Textbox(label='Enter your question here')
-#             btn = gr.Button(value='Submit')
-#             btn.style(full_width=True)
-
-#         with gr.Group():
-#             answer = gr.Textbox(label='The answer to your question is :')
-
-#         btn.click(question_answer, inputs=[url, file, question,openAI_key], outputs=[answer])
-# #openai.api_key = os.getenv('Your_Key_Here') 
-# demo.launch()
