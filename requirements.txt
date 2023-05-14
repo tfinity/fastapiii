@@ -4,5 +4,10 @@ scikit-learn
 tensorflow>=2.0.0
 tensorflow-hub
 openai==0.10.2
-gradio
+python-multipart
+pdf2image
+requests
+pytesseract
+apt-get install poppler-utils
+apt-get install tesseract-ocr
 

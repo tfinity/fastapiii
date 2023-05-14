@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query,UploadFile, File
+from fastapi import FastAPI, Query,UploadFile, File, HTTPException
 import urllib.request
 from typing import Optional
 import fitz
@@ -6,13 +6,15 @@ import re
 import numpy as np
 import tensorflow_hub as hub
 import openai
+from pdf2image import convert_from_path
+import pytesseract
+import requests
+import tempfile
 #import gradio as gr
 import os
 from sklearn.neighbors import NearestNeighbors
-from mangum import Mangum
 
 app = FastAPI()
-handler=Mangum(app)
 
 @app.get("/")
 async def root(api: Optional[str]=Query(None,title="api"),
@@ -43,6 +45,40 @@ async def create_upload_file(file: UploadFile | None = None):
         return {"message": "No upload file sent"}
     else:
         return {"filename": file.filename}
+
+@app.get("/extract_text")
+async def extract_text_from_pdf(url: str):
+    try:
+        extracted_text = ocr_scanned_pdf(url)
+        return {"extracted_text": extracted_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def ocr_scanned_pdf(url):
+    # Download the PDF file
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail="Failed to download PDF file")
+
+    # Save the PDF file to a temporary location
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_pdf:
+        temp_pdf.write(response.content)
+        temp_pdf_path = temp_pdf.name
+
+    # Convert PDF to images
+    pdf_images = convert_from_path(temp_pdf_path)
+
+    # Perform OCR on each image and extract text
+    extracted_text = ""
+    for image in pdf_images:
+        text = pytesseract.image_to_string(image)
+        extracted_text += text
+
+    # Clean up the temporary PDF file
+    os.remove(temp_pdf_path)
+
+    return extracted_text
+
 
 
 def download_pdf(url, output_path):
